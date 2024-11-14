@@ -222,21 +222,20 @@
         async function exportRepo() {
             const repoUrl = repoUrlInput.value.trim();
             const token = tokenInput.value.trim();
-    
+
             if (!repoUrl) {
                 addLog('Por favor ingresa la URL del repositorio', 'error');
                 return;
             }
-    
+
             exportButton.disabled = true;
             addLog('Iniciando exportación...');
-    
+
             try {
-                // Mostrar URL completa para debugging
-                const apiUrl = window.location.origin + '/api/export';
-                addLog(`Conectando a: ${apiUrl}`);
-    
-                const response = await fetch('/api/export', {
+                const apiUrl = '/api/export'; // Cambiado a ruta relativa
+                addLog(`Enviando solicitud...`);
+
+                const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -246,20 +245,30 @@
                         token: token || undefined
                     })
                 });
-    
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Error del servidor: ${response.status} - ${errorText}`);
+
+                // Log para debugging
+                addLog(`Estado de respuesta: ${response.status}`);
+                
+                const responseText = await response.text();
+                addLog(`Respuesta del servidor: ${responseText}`);
+
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (e) {
+                    throw new Error(`Error parseando respuesta: ${responseText}`);
                 }
-    
-                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Error desconocido');
+                }
+
                 addLog('Exportación completada exitosamente', 'success');
                 
-                // Crear un blob con el contenido
+                // Crear blob y descargar
                 const blob = new Blob([data.content], { type: 'text/plain' });
                 const downloadUrl = URL.createObjectURL(blob);
                 
-                // Crear y simular click en link de descarga
                 const downloadLink = document.createElement('a');
                 downloadLink.href = downloadUrl;
                 downloadLink.download = data.filename || 'repository-export.txt';
@@ -267,7 +276,7 @@
                 downloadLink.click();
                 document.body.removeChild(downloadLink);
                 URL.revokeObjectURL(downloadUrl);
-    
+
             } catch (error) {
                 addLog(`Error: ${error.message}`, 'error');
                 console.error('Error completo:', error);
