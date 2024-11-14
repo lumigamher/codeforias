@@ -232,10 +232,7 @@
             addLog('Iniciando exportación...');
 
             try {
-                const apiUrl = '/api/export'; // Cambiado a ruta relativa
-                addLog(`Enviando solicitud...`);
-
-                const response = await fetch(apiUrl, {
+                const response = await fetch('/api/export', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -246,32 +243,20 @@
                     })
                 });
 
-                // Log para debugging
-                addLog(`Estado de respuesta: ${response.status}`);
-                
-                const responseText = await response.text();
-                addLog(`Respuesta del servidor: ${responseText}`);
-
-                let data;
-                try {
-                    data = JSON.parse(responseText);
-                } catch (e) {
-                    throw new Error(`Error parseando respuesta: ${responseText}`);
-                }
-
                 if (!response.ok) {
-                    throw new Error(data.message || 'Error desconocido');
+                    throw new Error(`Error: ${response.status}`);
                 }
 
-                addLog('Exportación completada exitosamente', 'success');
+                const data = await response.json();
+                addLog('Estructura del repositorio obtenida', 'success');
                 
-                // Crear blob y descargar
+                // Crear archivo de descarga
                 const blob = new Blob([data.content], { type: 'text/plain' });
                 const downloadUrl = URL.createObjectURL(blob);
                 
                 const downloadLink = document.createElement('a');
                 downloadLink.href = downloadUrl;
-                downloadLink.download = data.filename || 'repository-export.txt';
+                downloadLink.download = data.filename;
                 document.body.appendChild(downloadLink);
                 downloadLink.click();
                 document.body.removeChild(downloadLink);
@@ -279,9 +264,6 @@
 
             } catch (error) {
                 addLog(`Error: ${error.message}`, 'error');
-                console.error('Error completo:', error);
-            } finally {
-                exportButton.disabled = false;
             }
         }
     

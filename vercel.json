@@ -1,11 +1,5 @@
 {
     "version": 2,
-    "functions": {
-        "api/*.js": {
-            "memory": 1024,
-            "maxDuration": 10
-        }
-    },
     "builds": [
         { 
             "src": "frontend/**",
@@ -13,13 +7,16 @@
         },
         { 
             "src": "api/export.js",
-            "use": "@vercel/node"
+            "use": "@vercel/node",
+            "config": {
+                "maxDuration": 60
+            }
         }
     ],
     "routes": [
         {
             "src": "/api/export",
-            "dest": "api/export.js",
+            "dest": "/api/export.js",
             "methods": ["POST", "OPTIONS"]
         },
         {
