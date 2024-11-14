@@ -1,18 +1,25 @@
 const { Octokit } = require('@octokit/rest');
 
 module.exports = async (req, res) => {
-    // Habilitar CORS
+    // Configurar CORS
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
     res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
+    // Manejar preflight requests
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
     }
 
+    // Verificar método
+    if (req.method !== 'POST') {
+        return res.status(405).json({ message: 'Método no permitido' });
+    }
+
     try {
+        console.log('Recibida solicitud:', req.body);
         const { repoUrl, token } = req.body;
 
         if (!repoUrl) {
@@ -21,46 +28,56 @@ module.exports = async (req, res) => {
 
         // Extraer owner y repo de la URL
         const urlParts = repoUrl.replace('https://github.com/', '').split('/');
+        if (urlParts.length < 2) {
+            return res.status(400).json({ message: 'URL de repositorio inválida' });
+        }
+
         const owner = urlParts[0];
         const repo = urlParts[1];
+
+        console.log(`Procesando repositorio: ${owner}/${repo}`);
 
         const octokit = new Octokit({
             auth: token || process.env.GITHUB_TOKEN
         });
 
-        // Obtener y procesar contenido
-        const result = await exportRepository(octokit, owner, repo);
+        // Verificar que el repositorio existe
+        try {
+            await octokit.repos.get({
+                owner,
+                repo
+            });
+        } catch (error) {
+            return res.status(404).json({ 
+                message: 'Repositorio no encontrado o sin acceso' 
+            });
+        }
 
-        // Generar nombre de archivo
+        // Procesar repositorio
+        const content = await processRepository(octokit, owner, repo);
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `codeforias_${owner}_${repo}_${timestamp}.txt`;
 
-        // En producción, aquí subirías el archivo a un servicio de almacenamiento
-        // Por ahora, enviamos el contenido directamente
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             filename,
-            content: result,
-            downloadUrl: `/api/download?filename=${filename}`
+            content
         });
 
     } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Error procesando el repositorio'
+        console.error('Error en el servidor:', error);
+        return res.status(500).json({
+            message: 'Error procesando el repositorio: ' + error.message
         });
     }
 };
 
-async function exportRepository(octokit, owner, repo) {
-    let result = `CodeForias - Exportación de Repositorio\n`;
-    result += `Fecha: ${new Date().toISOString()}\n`;
-    result += `Repositorio: ${owner}/${repo}\n\n`;
+async function processRepository(octokit, owner, repo) {
+    let content = `CodeForias - Exportación de Repositorio\n`;
+    content += `Fecha: ${new Date().toISOString()}\n`;
+    content += `Repositorio: ${owner}/${repo}\n\n`;
 
-    async function processContent(path = '') {
+    async function processPath(path = '') {
         try {
             const { data } = await octokit.repos.getContent({
                 owner,
@@ -71,30 +88,29 @@ async function exportRepository(octokit, owner, repo) {
             if (Array.isArray(data)) {
                 for (const item of data) {
                     if (item.type === 'dir') {
-                        result += `\nDirectorio: ${item.path}\n`;
-                        await processContent(item.path);
+                        content += `\nDirectorio: ${item.path}\n`;
+                        await processPath(item.path);
                     } else if (item.type === 'file') {
-                        result += `\n${'='.repeat(80)}\n`;
-                        result += `Archivo: ${item.path}\n`;
-                        result += `${'='.repeat(80)}\n`;
-                        
+                        content += `\n${'='.repeat(80)}\n`;
+                        content += `Archivo: ${item.path}\n`;
+                        content += `${'='.repeat(80)}\n`;
+
                         const fileData = await octokit.repos.getContent({
                             owner,
                             repo,
                             path: item.path
                         });
-                        
-                        const content = Buffer.from(fileData.data.content, 'base64').toString();
-                        result += content + '\n';
+
+                        const fileContent = Buffer.from(fileData.data.content, 'base64').toString();
+                        content += fileContent + '\n';
                     }
                 }
             }
         } catch (error) {
-            console.error(`Error procesando ${path}:`, error);
-            result += `Error procesando ${path}: ${error.message}\n`;
+            content += `Error procesando ${path}: ${error.message}\n`;
         }
     }
 
-    await processContent();
-    return result;
+    await processPath();
+    return content;
 }

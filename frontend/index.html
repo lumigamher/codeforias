@@ -209,7 +209,7 @@
         const exportButton = document.getElementById('export-button');
         const repoUrlInput = document.getElementById('repo-url');
         const tokenInput = document.getElementById('github-token');
-
+    
         function addLog(message, type = 'info') {
             const entry = document.createElement('div');
             entry.className = `log-entry ${type}`;
@@ -218,50 +218,64 @@
             logContainer.appendChild(entry);
             logContainer.scrollTop = logContainer.scrollHeight;
         }
-
+    
         async function exportRepo() {
             const repoUrl = repoUrlInput.value.trim();
             const token = tokenInput.value.trim();
-
+    
             if (!repoUrl) {
                 addLog('Por favor ingresa la URL del repositorio', 'error');
                 return;
             }
-
+    
             exportButton.disabled = true;
             addLog('Iniciando exportación...');
-
+    
             try {
+                // Mostrar URL completa para debugging
+                const apiUrl = window.location.origin + '/api/export';
+                addLog(`Conectando a: ${apiUrl}`);
+    
                 const response = await fetch('/api/export', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ repoUrl, token })
+                    body: JSON.stringify({
+                        repoUrl,
+                        token: token || undefined
+                    })
                 });
-
-                const data = await response.json();
-
+    
                 if (!response.ok) {
-                    throw new Error(data.message || 'Error en la exportación');
+                    const errorText = await response.text();
+                    throw new Error(`Error del servidor: ${response.status} - ${errorText}`);
                 }
-
+    
+                const data = await response.json();
                 addLog('Exportación completada exitosamente', 'success');
-                addLog(`Archivo generado: ${data.filename}`, 'success');
                 
-                // Crear link de descarga
+                // Crear un blob con el contenido
+                const blob = new Blob([data.content], { type: 'text/plain' });
+                const downloadUrl = URL.createObjectURL(blob);
+                
+                // Crear y simular click en link de descarga
                 const downloadLink = document.createElement('a');
-                downloadLink.href = data.downloadUrl;
-                downloadLink.download = data.filename;
+                downloadLink.href = downloadUrl;
+                downloadLink.download = data.filename || 'repository-export.txt';
+                document.body.appendChild(downloadLink);
                 downloadLink.click();
-
+                document.body.removeChild(downloadLink);
+                URL.revokeObjectURL(downloadUrl);
+    
             } catch (error) {
                 addLog(`Error: ${error.message}`, 'error');
+                console.error('Error completo:', error);
             } finally {
                 exportButton.disabled = false;
             }
         }
-
+    
         exportButton.addEventListener('click', exportRepo);
     </script>
 </body>
