@@ -1,0 +1,9 @@
+{
+    "name": "codeforias",
+    "version": "1.0.0",
+    "description": "GitHub Repository Exporter",
+    "main": "api/export.js",
+    "dependencies": {
+        "@octokit/rest": "^19.0.13"
+    }
+}
